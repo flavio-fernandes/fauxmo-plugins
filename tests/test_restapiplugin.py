@@ -1,9 +1,10 @@
 """test_restapiplugin.py :: Tests for Fauxmo's `RESTAPIPlugin`."""
 
 import json
+import multiprocessing as mp
+import socket
 import time
-from multiprocessing import Process
-from typing import Generator
+from typing import Callable, Generator
 
 import httpbin
 import pytest
@@ -17,14 +18,28 @@ config_path_str = "tests/test_restapiplugin_config.json"
 @pytest.fixture(scope="function")
 def restapiplugin_target() -> Generator:
     """Simulate the endpoints triggered by RESTAPIPlugin."""
-    fauxmo_device = Process(
+    httpbin_address = ("127.0.0.1", 8000)
+    ctx = mp.get_context("fork")
+    fauxmo_device = ctx.Process(
         target=httpbin.core.app.run,
-        kwargs={"host": "127.0.0.1", "port": 8000},
+        kwargs={
+            "host": httpbin_address[0],
+            "port": httpbin_address[1],
+            "threaded": True,
+        },
         daemon=True,
     )
 
     fauxmo_device.start()
-    time.sleep(1)
+
+    for _retry in range(10):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect(httpbin_address)
+        except ConnectionRefusedError:
+            time.sleep(0.1)
+            continue
+        break
 
     yield
 
@@ -33,7 +48,7 @@ def restapiplugin_target() -> Generator:
 
 
 def test_restapiplugin_integration(
-    fauxmo_server: pytest.fixture, restapiplugin_target: pytest.fixture
+    fauxmo_server: Callable, restapiplugin_target: Callable
 ) -> None:
     """Test "on" and "off" actions for RESTAPIPlugin.
 
@@ -67,7 +82,7 @@ def test_restapiplugin_integration(
     assert resp_state.status_code == 200
 
 
-def test_restapiplugin_unit(restapiplugin_target: pytest.fixture) -> None:
+def test_restapiplugin_unit(restapiplugin_target: Callable) -> None:
     """Test simple unit tests on just the device without the integration."""
     with open(config_path_str) as f:
         config: dict = json.load(f)
