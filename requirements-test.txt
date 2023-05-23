@@ -10,6 +10,6 @@ paho-mqtt==1.5.1
 pycodestyle==2.7.0
 pydocstyle==6.1.1
 pytest==6.2.4
-requests==2.25.1
+requests==2.31.0
 tox==3.23.1
 types-requests==2.25.0
